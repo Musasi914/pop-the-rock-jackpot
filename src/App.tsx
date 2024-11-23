@@ -4,18 +4,15 @@ import { useEffect, useRef, useState } from "react";
 import { signInAnonymously } from "firebase/auth";
 import { auth, db } from "../firebase";
 import { createPortal } from "react-dom";
-import {
-  addDoc,
-  collection,
-  doc,
-  getDoc,
-  setDoc,
-  updateDoc,
-} from "firebase/firestore";
+import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
 
+type dbData = {
+  name: string;
+  highScore: number;
+};
 function App() {
-  const [dbData, setDbData] = useState([]);
-  const [userUid, setUserUid] = useState<string | null>();
+  const [dbData, setDbData] = useState<dbData[]>([]);
+  const [userUid, setUserUid] = useState<string>("");
   const [willChangeName, setWillChangeName] = useState("");
   const [userName, setUserName] = useState("");
   const [nowPoint, setNowPoint] = useState<number | null>(null);
@@ -51,7 +48,7 @@ function App() {
     hitCircleRef.current?.style.setProperty("translate", `${x}px ${y}px`);
   };
 
-  const handleKeyDown = (e) => {
+  const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === " " || e.code === "Space") {
       e.preventDefault();
       setShowModal(false);
@@ -85,9 +82,11 @@ function App() {
   };
 
   const registerDbData = async () => {
-    const docRef = doc(db, "users", auth.currentUser?.uid);
+    const docRef = doc(db, "users", auth.currentUser!.uid);
     const docSnap = await getDoc(docRef);
-    setDbData([docSnap.data()]);
+    if (docSnap.exists()) {
+      setDbData([docSnap.data() as dbData]);
+    }
     return { docRef, docSnap };
   };
 
@@ -107,12 +106,12 @@ function App() {
 
   useEffect(() => {
     const register = async () => {
-      await signInAnonymously(auth).then((user) => {
+      await signInAnonymously(auth).then((userCredential) => {
         console.log("auth");
-        setUserUid(user.user.auth.currentUser.uid);
+        setUserUid(userCredential.user.uid);
       });
 
-      const { docRef, docSnap } = await registerDbData();
+      const { docSnap } = await registerDbData();
 
       console.log(docSnap.data());
 
@@ -121,10 +120,14 @@ function App() {
         console.log("すでに登録済み");
         setUserName(docSnap.data().name);
       } else {
-        await setDoc(doc(db, "users", auth.currentUser?.uid), {
-          name: "guest",
-          highScore: 0,
-        });
+        try {
+          await setDoc(doc(db, "users", auth.currentUser!.uid), {
+            name: "guest",
+            highScore: 0,
+          });
+        } catch (error) {
+          console.log(error);
+        }
       }
     };
     register();
