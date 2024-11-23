@@ -4,7 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import { signInAnonymously } from "firebase/auth";
 import { auth, db } from "../firebase";
 import { createPortal } from "react-dom";
-import { doc, getDoc, setDoc, updateDoc } from "firebase/firestore";
+import {
+  collection,
+  doc,
+  getDoc,
+  getDocs,
+  setDoc,
+  updateDoc,
+} from "firebase/firestore";
+import Portal from "./comp/Portal";
+import RankingTable from "./comp/RankingTable";
 
 type dbData = {
   name: string;
@@ -74,20 +83,19 @@ function App() {
           const newHighScore = count;
           setHighestPoint(newHighScore);
           registerHighScore(newHighScore);
-          registerDbData();
+          fetchDbData();
         }
         setCount(0);
       }
     }
   };
 
-  const registerDbData = async () => {
-    const docRef = doc(db, "users", auth.currentUser!.uid);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-      setDbData([docSnap.data() as dbData]);
-    }
-    return { docRef, docSnap };
+  const fetchDbData = async () => {
+    const querySnapshot = await getDocs(collection(db, "users"));
+    setDbData([]);
+    querySnapshot.forEach((doc) => {
+      setDbData((prev) => [...prev, doc.data() as dbData]);
+    });
   };
 
   const registerHighScore = async (highscore: number) => {
@@ -111,20 +119,23 @@ function App() {
         setUserUid(userCredential.user.uid);
       });
 
-      const { docSnap } = await registerDbData();
+      fetchDbData();
 
-      console.log(docSnap.data());
+      const docRef = doc(db, "users", auth.currentUser!.uid);
+      const docSnap = await getDoc(docRef);
 
       // db登録
       if (docSnap.exists()) {
         console.log("すでに登録済み");
         setUserName(docSnap.data().name);
+        setHighestPoint(docSnap.data().highScore);
       } else {
         try {
           await setDoc(doc(db, "users", auth.currentUser!.uid), {
             name: "guest",
             highScore: 0,
           });
+          setUserName("guest");
         } catch (error) {
           console.log(error);
         }
@@ -156,7 +167,13 @@ function App() {
     await updateDoc(userRef, {
       name: willChangeName,
     });
+    // registerDbData(willChangeName);
+    fetchDbData();
   };
+
+  useEffect(() => {
+    dbData.sort((a, b) => b.highScore - a.highScore);
+  }, [dbData]);
   return (
     <div className="bg-gray-600 min-h-screen p-5">
       <h1 className="font-bold text-3xl text-sky-50 text-center">
@@ -195,11 +212,7 @@ function App() {
       </div>
       <p>黄色の丸のとこでスペースを押してください</p>
       <p>だんだん早くなります</p>
-
-      <div>
-        <p>登録名：{userName}さん</p>
-      </div>
-
+      <p>登録名：{userName}さん</p>
       <div>
         <label>
           登録名変更:
@@ -219,40 +232,14 @@ function App() {
         </label>
       </div>
 
-      <table>
-        <tbody>
-          <tr>
-            <th className="p-2 text-center">順位</th>
-            <th className="p-2 text-center">登録名</th>
-            <th className="p-2 text-center">最高点</th>
-          </tr>
-          {dbData.map((data, i) => (
-            <tr key={i}>
-              <td className="px-2 text-center">{i + 1}</td>
-              <td className="px-2 text-center">{data.name}</td>
-              <td className="px-2 text-center">{data.highScore}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <ul></ul>
-
+      <RankingTable dbData={dbData} />
       {showModal &&
         createPortal(
-          <div className="text-center fixed inset-0 bg-black bg-opacity-50 z-50 grid place-items-center">
-            <div className="bg-white w-10/12 mx-auto p-10">
-              <p className="text-lg">おめでとう、今の記録は {nowPoint} です</p>
-              <button onClick={() => setShowModal(false)}>close</button>
-            </div>
-            <ul>
-              {dbData.map((data, i) => (
-                <li key={i}>
-                  {data.name} : {data.highScore}
-                </li>
-              ))}
-            </ul>
-          </div>,
+          <Portal
+            nowPoint={nowPoint}
+            setShowModal={setShowModal}
+            dbData={dbData}
+          />,
           document.body
         )}
     </div>
