@@ -242,6 +242,13 @@ function App() {
           />,
           document.body
         )}
+
+      <footer>
+        github:{" "}
+        <a href="https://github.com/Musasi914/pop-the-rock-jackpot">
+          https://github.com/Musasi914/pop-the-rock-jackpot
+        </a>
+      </footer>
     </div>
   );
 }
